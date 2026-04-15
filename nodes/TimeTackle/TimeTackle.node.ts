@@ -6,7 +6,7 @@ import type {
 	INodeTypeDescription,
 	IHttpRequestMethods,
 } from 'n8n-workflow';
-import { NodeConnectionType } from 'n8n-workflow';
+import { NodeConnectionTypes } from 'n8n-workflow';
 
 export class TimeTackle implements INodeType {
 	description: INodeTypeDescription = {
@@ -20,8 +20,8 @@ export class TimeTackle implements INodeType {
 		defaults: {
 			name: 'TimeTackle',
 		},
-		inputs: [NodeConnectionType.Main],
-		outputs: [NodeConnectionType.Main],
+		inputs: [NodeConnectionTypes.Main],
+		outputs: [NodeConnectionTypes.Main],
 		credentials: [
 			{
 				name: 'timeTackleApi',
@@ -219,7 +219,7 @@ export class TimeTackle implements INodeType {
 					const endDate = this.getNodeParameter('endDate', i) as string;
 					const since = this.getNodeParameter('since', i) as string;
 					const mergeAll = this.getNodeParameter('mergeAll', i) as boolean;
-					const additionalFields = this.getNodeParameter('additionalFields', i) as string;
+					const additionalFields = this.getNodeParameter('additionalFields', i) as unknown as string;
 
 					if (startDate) body.startDate = startDate;
 					if (endDate) body.endDate = endDate;
