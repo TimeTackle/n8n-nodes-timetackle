@@ -202,11 +202,10 @@ export class TimeTackle implements INodeType {
 
 		for (let i = 0; i < items.length; i++) {
 			try {
-				let responseData: IDataObject | IDataObject[];
 				let method: IHttpRequestMethods = 'GET';
 				let endpoint = '';
 				let body: IDataObject = {};
-				let qs: IDataObject = {};
+				const qs: IDataObject = {};
 
 				// ─── Export ───
 				if (resource === 'export') {
@@ -265,7 +264,7 @@ export class TimeTackle implements INodeType {
 					json: true,
 				};
 
-				responseData = await this.helpers.requestWithAuthentication.call(
+				const responseData = await this.helpers.requestWithAuthentication.call(
 					this,
 					'timeTackleApi',
 					requestOptions,
