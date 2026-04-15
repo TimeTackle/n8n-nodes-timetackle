@@ -26,4 +26,3 @@ This node uses **API Key** authentication. Find your API key in Settings → API
 ## License
 
 [MIT](LICENSE.md)
-# n8n-nodes-timetackle
