@@ -1,0 +1,65 @@
+{
+	"name": "n8n-nodes-timetackle",
+	"version": "0.1.0",
+	"description": "n8n community node for TimeTackle — workforce analytics and calendar management platform. Export calendar data, manage properties, sync CRM, and more.",
+	"keywords": [
+		"n8n-community-node-package",
+		"n8n",
+		"timetackle",
+		"calendar",
+		"analytics",
+		"workforce",
+		"crm",
+		"time-tracking"
+	],
+	"license": "MIT",
+	"homepage": "https://timetackle.com",
+	"author": {
+		"name": "TimeTackle",
+		"email": "support@timetackle.com",
+		"url": "https://timetackle.com"
+	},
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/AkashMishra-TT/n8n-nodes-timetackle.git"
+	},
+	"engines": {
+		"node": ">=22.0"
+	},
+	"main": "dist/nodes/TimeTackle/TimeTackle.node.js",
+	"scripts": {
+		"predev": "npm run build",
+		"dev": "n8n start --tunnel",
+		"build": "tsc && gulp build:icons",
+		"build:watch": "tsc --watch",
+		"lint": "eslint nodes credentials --ext .ts",
+		"lint:fix": "eslint nodes credentials --ext .ts --fix",
+		"prepublishOnly": "npm run build && npm run lint",
+		"release": "npm run lint && npm run build && changeset publish"
+	},
+	"files": [
+		"dist"
+	],
+	"n8n": {
+		"n8nNodesApiVersion": 1,
+		"credentials": [
+			"dist/credentials/TimeTackleApi.credentials.js"
+		],
+		"nodes": [
+			"dist/nodes/TimeTackle/TimeTackle.node.js"
+		]
+	},
+	"devDependencies": {
+		"@changesets/cli": "^2.27.0",
+		"@types/node": "^22.0.0",
+		"@typescript-eslint/eslint-plugin": "^8.0.0",
+		"@typescript-eslint/parser": "^8.0.0",
+		"eslint": "^8.56.0",
+		"gulp": "^5.0.0",
+		"n8n-workflow": "^1.0.0",
+		"typescript": "^5.6.0"
+	},
+	"peerDependencies": {
+		"n8n-workflow": "*"
+	}
+}
