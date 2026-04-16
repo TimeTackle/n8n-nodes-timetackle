@@ -6,7 +6,6 @@ import type {
 	INodeTypeDescription,
 	IHttpRequestMethods,
 } from 'n8n-workflow';
-import { NodeConnectionTypes } from 'n8n-workflow';
 
 const EXPORT_SHOW = { resource: ['export'], operation: ['exportSheets'] };
 const PROPERTY_COLORS = [
@@ -43,8 +42,8 @@ export class TimeTackle implements INodeType {
 		defaults: {
 			name: 'TimeTackle',
 		},
-		inputs: [NodeConnectionTypes.Main],
-		outputs: [NodeConnectionTypes.Main],
+		inputs: ['main'],
+		outputs: ['main'],
 		credentials: [
 			{
 				name: 'timeTackleApi',
