@@ -659,18 +659,16 @@ export class TimeTackle implements INodeType {
 				}
 
 				// ─── Execute request ───
-				const requestOptions: IDataObject = {
-					method,
-					url: `${baseUrl}${endpoint}`,
-					qs,
-					body,
-					json: true,
-				};
-
-				const responseData = await this.helpers.requestWithAuthentication.call(
+				const responseData = await this.helpers.httpRequestWithAuthentication.call(
 					this,
 					'timeTackleApi',
-					requestOptions,
+					{
+						method,
+						url: `${baseUrl}${endpoint}`,
+						qs,
+						body,
+						json: true,
+					},
 				) as IDataObject;
 
 				const executionData = this.helpers.constructExecutionMetaData(

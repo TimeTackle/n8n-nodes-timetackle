@@ -1,6 +1,6 @@
 {
 	"name": "@timetackle/n8n-nodes-timetackle",
-	"version": "0.2.0",
+	"version": "0.2.1",
 	"description": "n8n community node for TimeTackle — workforce analytics and calendar management platform. Export calendar data, manage properties, sync CRM, and more.",
 	"keywords": [
 		"n8n-community-node-package",
