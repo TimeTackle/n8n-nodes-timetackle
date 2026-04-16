@@ -1,6 +1,6 @@
 {
 	"name": "n8n-nodes-timetackle",
-	"version": "0.2.2",
+	"version": "0.2.3",
 	"description": "n8n community node for TimeTackle — workforce analytics and calendar management platform. Export calendar data, manage properties, sync CRM, and more.",
 	"keywords": [
 		"n8n-community-node-package",
@@ -26,7 +26,7 @@
 	"engines": {
 		"node": ">=22.0"
 	},
-	"main": "dist/nodes/TimeTackle/TimeTackle.node.js",
+	"main": "index.js",
 	"scripts": {
 		"predev": "npm run build",
 		"dev": "n8n start --tunnel",
@@ -38,7 +38,8 @@
 		"release": "npm run lint && npm run build && changeset publish"
 	},
 	"files": [
-		"dist"
+		"dist",
+		"index.js"
 	],
 	"n8n": {
 		"n8nNodesApiVersion": 1,
