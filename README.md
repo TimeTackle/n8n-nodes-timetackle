@@ -1,27 +1,113 @@
 # n8n-nodes-timetackle
 
-This is an n8n community node for [TimeTackle](https://timetackle.com) — a workforce analytics and calendar management platform.
+n8n community nodes for [TimeTackle](https://timetackle.com), the workforce analytics and calendar platform. They call
+the [TimeTackle API](https://timetackle.gitbook.io/tackle) (`https://api.timetackle.com/external-api/v1`) with the
+workspace API key, and offer the same triggers, actions and searches as the TimeTackle Zapier app.
 
 [n8n](https://n8n.io/) is a [fair-code licensed](https://docs.n8n.io/reference/license/) workflow automation platform.
 
-## Features
-
-- **Export** — Export calendar event data with filters, pagination, and date ranges
-- **Properties** — Create, read, update, and delete properties (tags/categories)
-
 ## Installation
 
-Follow the [installation guide](https://docs.n8n.io/integrations/community-nodes/installation/) in the n8n community nodes documentation.
+Follow the [installation guide](https://docs.n8n.io/integrations/community-nodes/installation/) in the n8n community
+nodes documentation and install `@timetackle/n8n-nodes-timetackle`.
 
-## Authentication
+## Credentials
 
-This node uses **API Key** authentication. Find your API key in Settings → API Keys in your TimeTackle dashboard.
+Create a **TimeTackle API** credential with the workspace API key. An owner or admin finds the key in TimeTackle under
+Settings > Developer; API access is included in every paid plan. The key is sent in the `X-Tackle-Api-Key` header, and
+n8n tests it by reading the workspace owner.
+
+## What it does
+
+### TimeTackle Trigger
+
+Checks TimeTackle on the schedule set in **Poll Times** and starts the workflow once for each new record.
+
+| Trigger On | Fires when | Filters |
+| --- | --- | --- |
+| New Event | A calendar event is added to TimeTackle, including manual time entries | Calendars, team, time zone |
+| New Tagged Event | An event gets a chosen tag or property value | Tag (required), calendars, team, time zone |
+| New Tag or Property | A tag or property is created | Type, include sub-tags and options |
+| New Member | Someone is invited to or joins the workspace | Status, role |
+| New Team | A team (calendar group) is created | |
+
+Event triggers read events that changed in the last 2 days, from 30 days back to 90 days ahead, up to 300 per check.
+The node remembers the records it has sent, so each fires once. Records that already exist when the workflow is
+activated do not fire. A test run returns the latest record.
+
+### TimeTackle
+
+| Resource | Operation | What it does |
+| --- | --- | --- |
+| Event | Get Many | Finds calendar events in a date range, by calendar, team, tag or text |
+| Export | Export Calendar Data | Exports one page of calendar events with every export filter, format and field option |
+| Member | Get Many | Finds members by email, status or role |
+| Member | Invite | Invites a person and emails them the invitation |
+| Member | Update | Changes a member's name, role or calendar access |
+| Member | Remove | Removes a member or cancels a pending invite |
+| Property | Create | Creates a tag or property; one with the same name is updated instead of duplicated |
+| Property | Get Many | Finds tags, properties, sub-tags and options by name or type |
+| Property | Update | Renames or recolors a tag, property, sub-tag or option |
+| Property | Delete | Deletes a tag, property, sub-tag or option |
+| Team | Get Many | Finds teams (calendar groups) by name |
+
+Calendars, teams, members, tags and properties are picked from lists loaded from the workspace.
+
+### Example
+
+1. Add **TimeTackle Trigger**, set **Trigger On** to *New Tagged Event* and pick the tag `Client:Acme`.
+2. Add **Google Sheets > Append Row** and map `subject`, `startDate`, `duration` and `tags`.
+3. Activate the workflow. Each event tagged `Client:Acme` from then on adds one row.
+
+### Workflows saved with version 0.2.x
+
+The TimeTackle node is now at node version 2. Workflows saved with 0.2.x stay on node version 1 and run as before:
+Property > Create still takes primary and secondary properties, Property > Get Many still returns the
+`{primary, secondary}` list, and Export still reads 100 rows per page unless Limit was changed.
+
+## Develop
+
+Needs Node.js 22 or later.
+
+```bash
+npm install
+npm test
+npm run lint
+npm run build
+```
+
+`npm test` runs every trigger, operation and dropdown against mocked HTTP. `npm run lint` is `n8n-node lint`, the
+rules n8n applies to verified community nodes. Before a release, also run n8n's package scan on the build:
+
+```bash
+npx @n8n/scan-community-package .
+```
+
+To try the nodes in a local n8n at http://localhost:5678 (it asks for a local owner account the first time):
+
+```bash
+npm run dev
+```
+
+## Release
+
+Set the new version in `package.json` and add its notes to `CHANGELOG.md` in the pull request. After it is merged:
+
+```bash
+git tag v0.3.0
+git push origin v0.3.0
+```
+
+Pushing the `v*` tag runs `.github/workflows/publish.yml`, which lints, tests, builds and publishes to npm with a
+provenance statement (n8n requires this for verified nodes). It needs the `NPM_AUTH_TOKEN` repository secret.
+
+To list the nodes in n8n's node panel, submit the package for verification in the
+[n8n Creator Portal](https://creators.n8n.io/nodes).
 
 ## Resources
 
-- [TimeTackle API Documentation](https://timetackle.gitbook.io/tackle)
-- [n8n Community Nodes Documentation](https://docs.n8n.io/integrations/community-nodes/)
-- [TimeTackle Website](https://timetackle.com)
+- [TimeTackle API documentation](https://timetackle.gitbook.io/tackle)
+- [n8n community nodes documentation](https://docs.n8n.io/integrations/community-nodes/)
 
 ## License
 

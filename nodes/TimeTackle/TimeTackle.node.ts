@@ -5,9 +5,17 @@ import type {
 	INodeType,
 	INodeTypeDescription,
 	IHttpRequestMethods,
+	JsonObject,
 } from 'n8n-workflow';
+import { NodeApiError, NodeConnectionTypes, NodeOperationError } from 'n8n-workflow';
+
+import { eventFields, memberFields, propertyFields, teamFields } from './shared/descriptions';
+import { findOperation } from './shared/operations';
+import { listSearch, loadOptions } from './shared/options';
 
 const EXPORT_SHOW = { resource: ['export'], operation: ['exportSheets'] };
+// Version 1 of the Property fields. Workflows saved with version 1 keep them; version 2 uses shared/descriptions.
+const V1 = { '@version': [1] };
 const PROPERTY_COLORS = [
 	{ name: 'Tomato', value: 'Tomato' },
 	{ name: 'Flamingo', value: 'Flamingo' },
@@ -34,16 +42,17 @@ export class TimeTackle implements INodeType {
 	description: INodeTypeDescription = {
 		displayName: 'TimeTackle',
 		name: 'timeTackle',
-		icon: 'file:timetackle.svg',
+		icon: { light: 'file:timetackle.svg', dark: 'file:timetackle.svg' },
 		group: ['transform'],
-		version: 1,
+		version: [1, 2],
+		defaultVersion: 2,
 		subtitle: '={{$parameter["operation"] + ": " + $parameter["resource"]}}',
-		description: 'Interact with the TimeTackle API — export calendar data and manage properties. See https://timetackle.gitbook.io/tackle for API docs.',
+		description: 'Find and export calendar events and manage tags, properties, members and teams in TimeTackle',
 		defaults: {
 			name: 'TimeTackle',
 		},
-		inputs: ['main'],
-		outputs: ['main'],
+		inputs: [NodeConnectionTypes.Main],
+		outputs: [NodeConnectionTypes.Main],
 		credentials: [
 			{
 				name: 'timeTackleApi',
@@ -58,8 +67,11 @@ export class TimeTackle implements INodeType {
 				type: 'options',
 				noDataExpression: true,
 				options: [
+					{ name: 'Event', value: 'event' },
 					{ name: 'Export', value: 'export' },
+					{ name: 'Member', value: 'member' },
 					{ name: 'Property', value: 'property' },
+					{ name: 'Team', value: 'team' },
 				],
 				default: 'export',
 			},
@@ -96,9 +108,9 @@ export class TimeTackle implements INodeType {
 				displayName: 'Limit',
 				name: 'limit',
 				type: 'number',
-				default: 100,
+				default: 50,
 				required: true,
-				description: 'Number of results per page (max 500)',
+				description: 'Max number of results to return',
 				typeOptions: { maxValue: 500, minValue: 1 },
 				displayOptions: { show: EXPORT_SHOW },
 			},
@@ -176,20 +188,6 @@ export class TimeTackle implements INodeType {
 				displayOptions: { show: EXPORT_SHOW },
 				options: [
 					{
-						displayName: 'Tags',
-						name: 'tag',
-						type: 'string',
-						default: '',
-						description: 'Comma-separated tags to filter by (format: "key:value" or "key")',
-					},
-					{
-						displayName: 'RSVP',
-						name: 'rsvp',
-						type: 'boolean',
-						default: false,
-						description: 'Whether to filter by RSVP status',
-					},
-					{
 						displayName: 'All Day Events',
 						name: 'allDay',
 						type: 'options',
@@ -201,11 +199,32 @@ export class TimeTackle implements INodeType {
 						description: 'Whether to include or exclude all-day events',
 					},
 					{
-						displayName: 'Search',
-						name: 'search',
+						displayName: 'CRM Account Tags',
+						name: 'crmAccountTags',
 						type: 'string',
 						default: '',
-						description: 'Comma-separated search terms to filter events',
+						description: 'Comma-separated CRM account tags to filter by',
+					},
+					{
+						displayName: 'CRM Opportunity Owner Tags',
+						name: 'crmOpportunityOwnerTags',
+						type: 'string',
+						default: '',
+						description: 'Comma-separated CRM opportunity owner tags to filter by',
+					},
+					{
+						displayName: 'CRM Opportunity Tags',
+						name: 'crmOpportunityTags',
+						type: 'string',
+						default: '',
+						description: 'Comma-separated CRM opportunity tags to filter by',
+					},
+					{
+						displayName: 'CRM Stage Tags',
+						name: 'crmStageTags',
+						type: 'string',
+						default: '',
+						description: 'Comma-separated CRM stage tags to filter by',
 					},
 					{
 						displayName: 'Has CRM Account',
@@ -236,32 +255,25 @@ export class TimeTackle implements INodeType {
 						description: 'Whether to filter events with a CRM stage',
 					},
 					{
-						displayName: 'CRM Account Tags',
-						name: 'crmAccountTags',
-						type: 'string',
-						default: '',
-						description: 'Comma-separated CRM account tags to filter by',
+						displayName: 'RSVP',
+						name: 'rsvp',
+						type: 'boolean',
+						default: false,
+						description: 'Whether to filter by RSVP status',
 					},
 					{
-						displayName: 'CRM Opportunity Tags',
-						name: 'crmOpportunityTags',
+						displayName: 'Search',
+						name: 'search',
 						type: 'string',
 						default: '',
-						description: 'Comma-separated CRM opportunity tags to filter by',
+						description: 'Comma-separated search terms to filter events',
 					},
 					{
-						displayName: 'CRM Opportunity Owner Tags',
-						name: 'crmOpportunityOwnerTags',
+						displayName: 'Tags',
+						name: 'tag',
 						type: 'string',
 						default: '',
-						description: 'Comma-separated CRM opportunity owner tags to filter by',
-					},
-					{
-						displayName: 'CRM Stage Tags',
-						name: 'crmStageTags',
-						type: 'string',
-						default: '',
-						description: 'Comma-separated CRM stage tags to filter by',
+						description: 'Comma-separated tags to filter by (format: "key:value" or "key")',
 					},
 				],
 			},
@@ -289,17 +301,6 @@ export class TimeTackle implements INodeType {
 						],
 					},
 					{
-						displayName: 'Time Format',
-						name: 'time',
-						type: 'options',
-						default: 'HOUR_MIN_AMPM',
-						description: 'Format for time values in the response',
-						options: [
-							{ name: '12-Hour (AM/PM)', value: 'HOUR_MIN_AMPM' },
-							{ name: '24-Hour', value: 'HOUR_MIN_24' },
-						],
-					},
-					{
 						displayName: 'Duration Format',
 						name: 'duration',
 						type: 'options',
@@ -311,13 +312,6 @@ export class TimeTackle implements INodeType {
 						],
 					},
 					{
-						displayName: 'Exclude Resource',
-						name: 'excludeResource',
-						type: 'boolean',
-						default: false,
-						description: 'Whether to exclude resource calendars from results',
-					},
-					{
 						displayName: 'Exclude Organizer',
 						name: 'excludeOrganizer',
 						type: 'boolean',
@@ -325,11 +319,29 @@ export class TimeTackle implements INodeType {
 						description: 'Whether to exclude organizer data from results',
 					},
 					{
+						displayName: 'Exclude Resource',
+						name: 'excludeResource',
+						type: 'boolean',
+						default: false,
+						description: 'Whether to exclude resource calendars from results',
+					},
+					{
 						displayName: 'Single Column Tag',
 						name: 'singleColumnTag',
 						type: 'boolean',
 						default: true,
 						description: 'Whether to combine tags into a single column',
+					},
+					{
+						displayName: 'Time Format',
+						name: 'time',
+						type: 'options',
+						default: 'HOUR_MIN_AMPM',
+						description: 'Format for time values in the response',
+						options: [
+							{ name: '12-Hour (AM/PM)', value: 'HOUR_MIN_AMPM' },
+							{ name: '24-Hour', value: 'HOUR_MIN_24' },
+						],
 					},
 				],
 			},
@@ -343,42 +355,42 @@ export class TimeTackle implements INodeType {
 				default: {},
 				displayOptions: { show: EXPORT_SHOW },
 				options: [
-					{ displayName: 'Subject', name: 'subject', type: 'boolean', default: true, description: 'Whether to include the event subject' },
-					{ displayName: 'Start Date', name: 'startDate', type: 'boolean', default: true, description: 'Whether to include the event start date' },
-					{ displayName: 'Start Time', name: 'startTime', type: 'boolean', default: true, description: 'Whether to include the event start time' },
-					{ displayName: 'End Date', name: 'endDate', type: 'boolean', default: true, description: 'Whether to include the event end date' },
-					{ displayName: 'End Time', name: 'endTime', type: 'boolean', default: true, description: 'Whether to include the event end time' },
-					{ displayName: 'Duration', name: 'duration', type: 'boolean', default: true, description: 'Whether to include the event duration' },
-					{ displayName: 'Tags', name: 'tags', type: 'boolean', default: true, description: 'Whether to include event tags' },
+					{ displayName: 'Accepted Attendees By Email', name: 'acceptedAttendeesByEmail', type: 'boolean', default: false, description: 'Whether to include accepted attendees by email' },
+					{ displayName: 'Accepted Attendees By Name', name: 'acceptedAttendeesByName', type: 'boolean', default: false, description: 'Whether to include accepted attendees by name' },
+					{ displayName: 'All Attendees By Email', name: 'allAttendeesByEmail', type: 'boolean', default: false, description: 'Whether to include all attendees by email' },
+					{ displayName: 'All Attendees By Name', name: 'allAttendeesByName', type: 'boolean', default: false, description: 'Whether to include all attendees by name' },
+					{ displayName: 'Conference Links', name: 'conferenceLinks', type: 'boolean', default: false, description: 'Whether to include conference/meeting links' },
+					{ displayName: 'Created By Email', name: 'createdByEmail', type: 'boolean', default: false, description: 'Whether to include the creator email' },
+					{ displayName: 'Created By Name', name: 'createdByName', type: 'boolean', default: false, description: 'Whether to include the creator name' },
 					{ displayName: 'Created Date', name: 'createdDate', type: 'boolean', default: true, description: 'Whether to include the created date' },
 					{ displayName: 'Created Time', name: 'createdTime', type: 'boolean', default: true, description: 'Whether to include the created time' },
-					{ displayName: 'Description', name: 'description', type: 'boolean', default: false, description: 'Whether to include the event description' },
-					{ displayName: 'Location', name: 'location', type: 'boolean', default: false, description: 'Whether to include the event location' },
-					{ displayName: 'Event Notes', name: 'eventNotes', type: 'boolean', default: false, description: 'Whether to include event notes' },
-					{ displayName: 'Day of Week', name: 'dayOfWeek', type: 'boolean', default: false, description: 'Whether to include the day of the week' },
-					{ displayName: 'Day Total', name: 'dayTotal', type: 'boolean', default: false, description: 'Whether to include the day total duration' },
-					{ displayName: 'Sum All', name: 'sumAll', type: 'boolean', default: false, description: 'Whether to include the sum of all durations' },
-					{ displayName: 'Conference Links', name: 'conferenceLinks', type: 'boolean', default: false, description: 'Whether to include conference/meeting links' },
-					{ displayName: 'Created By Name', name: 'createdByName', type: 'boolean', default: false, description: 'Whether to include the creator name' },
-					{ displayName: 'Created By Email', name: 'createdByEmail', type: 'boolean', default: false, description: 'Whether to include the creator email' },
-					{ displayName: 'Organized By Name', name: 'organizedByName', type: 'boolean', default: false, description: 'Whether to include the organizer name' },
-					{ displayName: 'Organized By Email', name: 'organizedByEmail', type: 'boolean', default: false, description: 'Whether to include the organizer email' },
-					{ displayName: 'All Attendees By Name', name: 'allAttendeesByName', type: 'boolean', default: false, description: 'Whether to include all attendees by name' },
-					{ displayName: 'All Attendees By Email', name: 'allAttendeesByEmail', type: 'boolean', default: false, description: 'Whether to include all attendees by email' },
-					{ displayName: 'Accepted Attendees By Name', name: 'acceptedAttendeesByName', type: 'boolean', default: false, description: 'Whether to include accepted attendees by name' },
-					{ displayName: 'Accepted Attendees By Email', name: 'acceptedAttendeesByEmail', type: 'boolean', default: false, description: 'Whether to include accepted attendees by email' },
-					{ displayName: 'Declined Attendees By Name', name: 'declinedAttendeesByName', type: 'boolean', default: false, description: 'Whether to include declined attendees by name' },
-					{ displayName: 'Declined Attendees By Email', name: 'declinedAttendeesByEmail', type: 'boolean', default: false, description: 'Whether to include declined attendees by email' },
-					{ displayName: 'Tentative Attendees By Name', name: 'tentativeAttendeesByName', type: 'boolean', default: false, description: 'Whether to include tentative attendees by name' },
-					{ displayName: 'Tentative Attendees By Email', name: 'tentativeAttendeesByEmail', type: 'boolean', default: false, description: 'Whether to include tentative attendees by email' },
-					{ displayName: 'Not Responded Attendees By Name', name: 'notRespondedAttendeesByName', type: 'boolean', default: false, description: 'Whether to include non-responded attendees by name' },
-					{ displayName: 'Not Responded Attendees By Email', name: 'notRespondedAttendeesByEmail', type: 'boolean', default: false, description: 'Whether to include non-responded attendees by email' },
 					{ displayName: 'CRM Account ID', name: 'crmAccountId', type: 'boolean', default: false, description: 'Whether to include the CRM account ID' },
 					{ displayName: 'CRM Account Name', name: 'crmAccountName', type: 'boolean', default: false, description: 'Whether to include the CRM account name' },
 					{ displayName: 'CRM Opportunity ID', name: 'crmOpportunityId', type: 'boolean', default: false, description: 'Whether to include the CRM opportunity ID' },
 					{ displayName: 'CRM Opportunity Name', name: 'crmOpportunityName', type: 'boolean', default: false, description: 'Whether to include the CRM opportunity name' },
 					{ displayName: 'CRM Opportunity Owner ID', name: 'crmOpportunityOwnerId', type: 'boolean', default: false, description: 'Whether to include the CRM opportunity owner ID' },
 					{ displayName: 'CRM Opportunity Owner Name', name: 'crmOpportunityOwnerName', type: 'boolean', default: false, description: 'Whether to include the CRM opportunity owner name' },
+					{ displayName: 'Day of Week', name: 'dayOfWeek', type: 'boolean', default: false, description: 'Whether to include the day of the week' },
+					{ displayName: 'Day Total', name: 'dayTotal', type: 'boolean', default: false, description: 'Whether to include the day total duration' },
+					{ displayName: 'Declined Attendees By Email', name: 'declinedAttendeesByEmail', type: 'boolean', default: false, description: 'Whether to include declined attendees by email' },
+					{ displayName: 'Declined Attendees By Name', name: 'declinedAttendeesByName', type: 'boolean', default: false, description: 'Whether to include declined attendees by name' },
+					{ displayName: 'Description', name: 'description', type: 'boolean', default: false, description: 'Whether to include the event description' },
+					{ displayName: 'Duration', name: 'duration', type: 'boolean', default: true, description: 'Whether to include the event duration' },
+					{ displayName: 'End Date', name: 'endDate', type: 'boolean', default: true, description: 'Whether to include the event end date' },
+					{ displayName: 'End Time', name: 'endTime', type: 'boolean', default: true, description: 'Whether to include the event end time' },
+					{ displayName: 'Event Notes', name: 'eventNotes', type: 'boolean', default: false, description: 'Whether to include event notes' },
+					{ displayName: 'Location', name: 'location', type: 'boolean', default: false, description: 'Whether to include the event location' },
+					{ displayName: 'Not Responded Attendees By Email', name: 'notRespondedAttendeesByEmail', type: 'boolean', default: false, description: 'Whether to include non-responded attendees by email' },
+					{ displayName: 'Not Responded Attendees By Name', name: 'notRespondedAttendeesByName', type: 'boolean', default: false, description: 'Whether to include non-responded attendees by name' },
+					{ displayName: 'Organized By Email', name: 'organizedByEmail', type: 'boolean', default: false, description: 'Whether to include the organizer email' },
+					{ displayName: 'Organized By Name', name: 'organizedByName', type: 'boolean', default: false, description: 'Whether to include the organizer name' },
+					{ displayName: 'Start Date', name: 'startDate', type: 'boolean', default: true, description: 'Whether to include the event start date' },
+					{ displayName: 'Start Time', name: 'startTime', type: 'boolean', default: true, description: 'Whether to include the event start time' },
+					{ displayName: 'Subject', name: 'subject', type: 'boolean', default: true, description: 'Whether to include the event subject' },
+					{ displayName: 'Sum All', name: 'sumAll', type: 'boolean', default: false, description: 'Whether to include the sum of all durations' },
+					{ displayName: 'Tags', name: 'tags', type: 'boolean', default: true, description: 'Whether to include event tags' },
+					{ displayName: 'Tentative Attendees By Email', name: 'tentativeAttendeesByEmail', type: 'boolean', default: false, description: 'Whether to include tentative attendees by email' },
+					{ displayName: 'Tentative Attendees By Name', name: 'tentativeAttendeesByName', type: 'boolean', default: false, description: 'Whether to include tentative attendees by name' },
 				],
 			},
 
@@ -392,10 +404,10 @@ export class TimeTackle implements INodeType {
 				noDataExpression: true,
 				displayOptions: { show: { resource: ['property'] } },
 				options: [
-					{ name: 'Create', value: 'create', description: 'Create new properties', action: 'Create properties' },
-					{ name: 'Delete', value: 'delete', description: 'Delete a property', action: 'Delete a property' },
-					{ name: 'Get All', value: 'getAll', description: 'Get all properties', action: 'Get all properties' },
-					{ name: 'Update', value: 'update', description: 'Update a property', action: 'Update a property' },
+					{ name: 'Create', value: 'create', description: 'Create a tag or property', action: 'Create a tag or property' },
+					{ name: 'Delete', value: 'delete', description: 'Delete a tag, property, sub-tag or option', action: 'Delete a tag or property' },
+					{ name: 'Get Many', value: 'getAll', description: 'Find tags and properties, by name or type', action: 'Get many tags or properties' },
+					{ name: 'Update', value: 'update', description: 'Rename or recolor a tag, property, sub-tag or option', action: 'Update a tag or property' },
 				],
 				default: 'getAll',
 			},
@@ -406,7 +418,7 @@ export class TimeTackle implements INodeType {
 				required: true,
 				default: '',
 				displayOptions: {
-					show: { resource: ['property'], operation: ['update', 'delete'] },
+					show: { resource: ['property'], operation: ['update', 'delete'], ...V1 },
 				},
 				description: 'The ID of the property',
 			},
@@ -416,7 +428,7 @@ export class TimeTackle implements INodeType {
 				type: 'string',
 				default: '',
 				displayOptions: {
-					show: { resource: ['property'], operation: ['update'] },
+					show: { resource: ['property'], operation: ['update'], ...V1 },
 				},
 				description: 'New name for the property',
 			},
@@ -427,7 +439,7 @@ export class TimeTackle implements INodeType {
 				default: 'Blueberry',
 				options: PROPERTY_COLORS,
 				displayOptions: {
-					show: { resource: ['property'], operation: ['update'] },
+					show: { resource: ['property'], operation: ['update'], ...V1 },
 				},
 				description: 'Color for the property',
 			},
@@ -440,9 +452,9 @@ export class TimeTackle implements INodeType {
 				typeOptions: { multipleValues: true },
 				default: {},
 				displayOptions: {
-					show: { resource: ['property'], operation: ['create'] },
+					show: { resource: ['property'], operation: ['create'], ...V1 },
 				},
-				description: 'Primary properties to create. Docs: https://timetackle.gitbook.io/tackle',
+				description: 'Primary properties to create. Docs: https://timetackle.gitbook.io/tackle.',
 				options: [
 					{
 						displayName: 'Property',
@@ -484,9 +496,9 @@ export class TimeTackle implements INodeType {
 				typeOptions: { multipleValues: true },
 				default: {},
 				displayOptions: {
-					show: { resource: ['property'], operation: ['create'] },
+					show: { resource: ['property'], operation: ['create'], ...V1 },
 				},
-				description: 'Secondary properties to create. Docs: https://timetackle.gitbook.io/tackle',
+				description: 'Secondary properties to create. Docs: https://timetackle.gitbook.io/tackle.',
 				options: [
 					{
 						displayName: 'Property',
@@ -527,8 +539,15 @@ export class TimeTackle implements INodeType {
 					},
 				],
 			},
+			...propertyFields,
+			...eventFields,
+			...memberFields,
+			...teamFields,
 		],
+		usableAsTool: true,
 	};
+
+	methods = { loadOptions, listSearch };
 
 	async execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {
 		const items = this.getInputData();
@@ -536,9 +555,20 @@ export class TimeTackle implements INodeType {
 		const resource = this.getNodeParameter('resource', 0) as string;
 		const operation = this.getNodeParameter('operation', 0) as string;
 		const baseUrl = 'https://api.timetackle.com/external-api/v1';
+		const run = findOperation(resource, operation, this.getNode().typeVersion);
 
 		for (let i = 0; i < items.length; i++) {
 			try {
+				if (run) {
+					const records = await run.call(this, i);
+					returnData.push(
+						...this.helpers.constructExecutionMetaData(this.helpers.returnJsonArray(records), {
+							itemData: { item: i },
+						}),
+					);
+					continue;
+				}
+
 				let method: IHttpRequestMethods = 'GET';
 				let endpoint = '';
 				let body: IDataObject = {};
@@ -549,7 +579,12 @@ export class TimeTackle implements INodeType {
 					method = 'POST';
 					endpoint = '/export-sheets';
 					qs.page = this.getNodeParameter('page', i) as number;
-					qs.limit = this.getNodeParameter('limit', i) as number;
+					// Version 1 exported 100 rows per page unless Limit was changed; workflows saved that way keep it.
+					const savedLimit = this.getNode().parameters.limit;
+					qs.limit =
+						this.getNode().typeVersion === 1 && savedLimit === undefined
+							? 100
+							: (this.getNodeParameter('limit', i) as number);
 
 					const startDate = this.getNodeParameter('startDate', i) as string;
 					const endDate = this.getNodeParameter('endDate', i) as string;
@@ -685,7 +720,8 @@ export class TimeTackle implements INodeType {
 					returnData.push(...executionErrorData);
 					continue;
 				}
-				throw error;
+				if (error instanceof NodeOperationError) throw new NodeOperationError(this.getNode(), error, { itemIndex: i });
+				throw new NodeApiError(this.getNode(), error as JsonObject, { itemIndex: i });
 			}
 		}
 
