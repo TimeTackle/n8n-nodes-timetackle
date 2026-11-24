@@ -32,8 +32,9 @@ Checks TimeTackle on the schedule set in **Poll Times** and starts the workflow 
 | New Team | A team (calendar group) is created | |
 
 Event triggers read every event that changed in the last 2 days, from 30 days back to 90 days ahead.
-The node remembers the records it has sent, so each fires once. Records that already exist when the workflow is
-activated do not fire. A test run returns the latest record.
+The node remembers the records it has sent, so each fires once. Records that the first check returns do not fire.
+An older event that is edited later is new to the node, so New Event fires for it once; the TimeTackle Zapier app
+does the same. A test run returns the latest record.
 
 ### TimeTackle
 
