@@ -32,6 +32,24 @@ describe('New Event', () => {
 		expect((bodies[0].startDate as string) < (bodies[0].endDate as string)).toBe(true);
 	});
 
+	it('reads every page, so an event on a late page still fires', async () => {
+		const staticData = {};
+		const params = { event: 'newEvent' };
+		const page = (n: number) => [{ calendarId: 'a@x.com', eventId: `old${n}` }];
+		const scope = nock(API).post(`${BASE}/export-sheets`).query(true).reply(200, exportPage([]));
+		expect(await poll({ params, staticData })).toEqual([]);
+
+		[1, 2, 3, 4].forEach((n) =>
+			scope.post(`${BASE}/export-sheets`).query({ page: String(n), limit: '100' }).reply(200, exportPage(page(n), true)),
+		);
+		scope.post(`${BASE}/export-sheets`).query({ page: '5', limit: '100' })
+			.reply(200, exportPage([{ calendarId: 'a@x.com', eventId: 'late' }]));
+
+		const fired = await poll({ params, staticData });
+
+		expect(fired.map((e) => e.eventId)).toEqual(['old1', 'old2', 'old3', 'old4', 'late']);
+	});
+
 	it('does not fire for events that already exist when the workflow is activated', async () => {
 		nock(API).post(`${BASE}/export-sheets`).query(true)
 			.reply(200, exportPage([{ calendarId: 'a@x.com', eventId: 'e1' }]));

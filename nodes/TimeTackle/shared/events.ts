@@ -4,7 +4,6 @@ import type { IDataObject } from 'n8n-workflow';
 import { apiRequest, splitList, type TimeTackleContext } from './api';
 
 export const PAGE_SIZE = 100;
-const POLL_PAGES = 3;
 
 export const EVENT_FIELDS = {
 	tags: true,
@@ -71,10 +70,11 @@ export function pollingBody(input: EventFilters): IDataObject {
 // The same meeting can appear on several calendars, so the id combines calendar and event.
 const withId = (row: IDataObject): IDataObject => ({ id: `${row.calendarId}:${row.eventId}`, ...row });
 
+// Reads every page unless `maxRows` is given. A trigger must see every changed event: one it never reads is never sent.
 export async function fetchEvents(
 	this: TimeTackleContext,
 	body: IDataObject,
-	maxRows: number = POLL_PAGES * PAGE_SIZE,
+	maxRows: number = Infinity,
 ): Promise<IDataObject[]> {
 	const rows: IDataObject[] = [];
 	for (let page = 1; rows.length < maxRows; page += 1) {
