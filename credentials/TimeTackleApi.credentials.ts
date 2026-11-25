@@ -2,13 +2,15 @@ import type {
 	IAuthenticateGeneric,
 	ICredentialTestRequest,
 	ICredentialType,
+	Icon,
 	INodeProperties,
 } from 'n8n-workflow';
 
 export class TimeTackleApi implements ICredentialType {
 	name = 'timeTackleApi';
-	displayName = 'TimeTackle API Key';
+	displayName = 'TimeTackle API';
 	documentationUrl = 'https://timetackle.gitbook.io/tackle';
+	icon: Icon = { light: 'file:../icons/timetackle.svg', dark: 'file:../icons/timetackle.svg' };
 
 	properties: INodeProperties[] = [
 		{
@@ -18,7 +20,8 @@ export class TimeTackleApi implements ICredentialType {
 			typeOptions: { password: true },
 			default: '',
 			required: true,
-			description: 'Your TimeTackle API key. Find it in Settings → API Keys in your TimeTackle dashboard.',
+			description:
+				'An owner or admin finds the key in TimeTackle under Settings > Developer. API access is included in every paid plan.',
 		},
 	];
 
@@ -34,7 +37,8 @@ export class TimeTackleApi implements ICredentialType {
 	test: ICredentialTestRequest = {
 		request: {
 			baseURL: 'https://api.timetackle.com/external-api/v1',
-			url: '/properties',
+			url: '/users',
+			qs: { type: 'active', role: 'OWNER' },
 			method: 'GET',
 		},
 	};

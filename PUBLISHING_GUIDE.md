@@ -157,10 +157,7 @@ n8n-nodes-timetackle/
 
 ## Supported Operations
 
-| Resource   | Operations                        |
-|-----------|-----------------------------------|
-| Export     | Export Calendar Data              |
-| Property   | Create, Get All, Update, Delete  |
+See the tables in [README.md](README.md).
 
 ---
 
