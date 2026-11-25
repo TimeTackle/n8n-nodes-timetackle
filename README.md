@@ -37,7 +37,7 @@ Checks TimeTackle on the schedule set in **Poll Times** and starts the workflow 
 Event triggers read every event that changed in the last 2 days, from 30 days back to 90 days ahead.
 The node remembers the records it has sent, so each fires once. Records that the first check returns do not fire.
 An older event that is edited later is new to the node, so New Event fires for it once; the TimeTackle Zapier app
-does the same. A test run returns the latest record.
+does the same. A test run returns one record.
 
 ### TimeTackle
 
@@ -76,10 +76,11 @@ Add **TimeTackle Trigger** as the first node and set:
 | Trigger On | New Tagged Event |
 | Tag Name or ID | `Client:Acme` (picked from the list of your tags and their values) |
 | Calendar Names or IDs | leave empty for every calendar, or pick the calendars to watch |
-| Team Name or ID | leave empty, or pick a team to watch only its calendars |
+| Team Name or ID | All Teams, or pick a team to watch only its calendars |
 | Time Zone | `Europe/Berlin` |
 
-Click **Fetch Test Event** to load the latest matching event. Each item looks like this:
+Click **Fetch Test Event** to load one matching event from the last 30 days to the next 90. Each item looks like
+this:
 
 ```json
 {
@@ -98,8 +99,9 @@ Click **Fetch Test Event** to load the latest matching event. Each item looks li
   "createdDate": "10/28/2026",
   "createdTime": "09:12 AM",
   "organizedByEmail": "jane@acme.com",
-  "allAttendeesByEmail": "jane@acme.com, sam@client.com",
-  "tags": "Client:Acme, Billable",
+  "allAttendeesByEmail": "jane@acme.com,sam@client.com",
+  "source": "Google Calendar",
+  "tags": "Client:Acme,Billable",
   "crmAccountName": "Acme",
   "crmOpportunityName": "Acme renewal"
 }

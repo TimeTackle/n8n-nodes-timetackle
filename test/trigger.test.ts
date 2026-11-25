@@ -72,15 +72,32 @@ describe('New Event', () => {
 		expect(await poll({ params, staticData })).toEqual([]);
 	});
 
-	it('a test run returns the latest event and does not mark anything as sent', async () => {
+	it('a test run asks for one event from the whole window and does not mark anything as sent', async () => {
 		const staticData = {};
-		nock(API).post(`${BASE}/export-sheets`).query(true)
-			.reply(200, exportPage([{ calendarId: 'a@x.com', eventId: 'e1' }, { calendarId: 'a@x.com', eventId: 'e2' }]));
+		let sent: IDataObject = {};
+		nock(API).post(`${BASE}/export-sheets`, (body) => { sent = body; return true; })
+			.query({ page: '1', limit: '1' })
+			.reply(200, exportPage([{ calendarId: 'a@x.com', eventId: 'e1' }], true));
 
 		const results = await poll({ params: { event: 'newEvent' }, staticData, mode: 'manual' });
 
 		expect(results.map((e) => e.id)).toEqual(['a@x.com:e1']);
+		expect(sent.since).toBeUndefined();
+		expect((sent.startDate as string) < (sent.endDate as string)).toBe(true);
 		expect(staticData).toEqual({});
+	});
+
+	it('a test run of New Tagged Event keeps the tag filter', async () => {
+		let sent: IDataObject = {};
+		nock(API).post(`${BASE}/export-sheets`, (body) => { sent = body; return true; })
+			.query({ page: '1', limit: '1' })
+			.reply(200, exportPage([{ calendarId: 'a@x.com', eventId: 'e5' }]));
+
+		await poll({ params: { event: 'newTaggedEvent', tag: 'Client:Acme', teamId: '' }, mode: 'manual' });
+
+		expect(sent.filters).toEqual({ tag: ['Client:Acme'] });
+		expect(sent.groupId).toBeUndefined();
+		expect(sent.since).toBeUndefined();
 	});
 
 	it('skips the poll when the endpoint is busy, and keeps what it remembers', async () => {
@@ -193,6 +210,23 @@ describe('New Team', () => {
 		await expect(poll({ params: { event: 'newTeam' }, mode: 'manual' })).rejects.toThrow(
 			'No data with the current filter could be found',
 		);
+	});
+});
+
+describe('trigger definition', () => {
+	it('the optional team list offers All Teams, so an empty team is a valid choice', async () => {
+		nock(API).get(`${BASE}/calendars/groups`).reply(200, [{ id: 12, name: 'Sales' }]);
+
+		const options = await trigger.methods.loadOptions.getTeamsOrAll.call(fakeContext() as never);
+
+		expect(options).toEqual([{ name: 'All Teams', value: '' }, { name: 'Sales', value: 12 }]);
+		const team = trigger.description.properties.find((p) => p.name === 'teamId');
+		expect(team?.typeOptions).toEqual({ loadOptionsMethod: 'getTeamsOrAll' });
+		expect(team?.default).toBe('');
+	});
+
+	it('shows the chosen trigger by its label under the node', () => {
+		expect(trigger.description.subtitle).toContain('newTaggedEvent: "New Tagged Event"');
 	});
 });
 

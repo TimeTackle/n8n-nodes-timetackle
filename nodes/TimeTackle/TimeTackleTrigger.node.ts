@@ -10,7 +10,7 @@ import type {
 import { NodeApiError, NodeConnectionTypes, NodeOperationError } from 'n8n-workflow';
 
 import { byIdDesc, isBusyError } from './shared/api';
-import { fetchEvents, pollingBody, POLL_WINDOW_DAYS } from './shared/events';
+import { fetchEvents, pollingBody, POLL_WINDOW_DAYS, sampleBody } from './shared/events';
 import { ALL_ROLES, loadOptions, MEMBER_STATUSES, VARIETIES } from './shared/options';
 import { flattenProperties, getMembers, getProperties, getTeams } from './shared/resources';
 import { takeNew } from './shared/seen';
@@ -79,7 +79,7 @@ const properties: INodeProperties[] = [
 		displayName: 'Team Name or ID',
 		name: 'teamId',
 		type: 'options',
-		typeOptions: { loadOptionsMethod: 'getTeams' },
+		typeOptions: { loadOptionsMethod: 'getTeamsOrAll' },
 		default: '',
 		description:
 			'Only events from calendars in this team. Overrides Calendars. Choose from the list, or specify an ID using an <a href="https://docs.n8n.io/code/expressions/">expression</a>.',
@@ -141,7 +141,8 @@ export class TimeTackleTrigger implements INodeType {
 		icon: { light: 'file:timetackle.svg', dark: 'file:timetackle.svg' },
 		group: ['trigger'],
 		version: 1,
-		subtitle: '={{$parameter["event"]}}',
+		subtitle:
+			'={{ { newEvent: "New Event", newMember: "New Member", newProperty: "New Tag or Property", newTaggedEvent: "New Tagged Event", newTeam: "New Team" }[$parameter["event"]] }}',
 		description: 'Starts the workflow when events, tags, members or teams are added in TimeTackle',
 		defaults: {
 			name: 'TimeTackle Trigger',
@@ -175,7 +176,10 @@ export class TimeTackleTrigger implements INodeType {
 					filters.tag = this.getNodeParameter('tag') as string;
 					if (!filters.tag) throw new NodeOperationError(this.getNode(), 'Choose the tag to watch.');
 				}
-				records = await fetchEvents.call(this, pollingBody(filters));
+				records =
+					this.getMode() === 'manual'
+						? await fetchEvents.call(this, sampleBody(filters), 1)
+						: await fetchEvents.call(this, pollingBody(filters));
 				// An event can come back for as long as it is inside the polling window.
 				forgetAfterDays = POLL_WINDOW_DAYS + 1;
 			} else if (event === 'newProperty') {
@@ -202,7 +206,7 @@ export class TimeTackleTrigger implements INodeType {
 			throw new NodeApiError(this.getNode(), error as JsonObject);
 		}
 
-		// A test run shows the latest record without marking anything as sent.
+		// A test run shows one record without marking anything as sent.
 		if (this.getMode() === 'manual') {
 			if (!records.length) {
 				throw new NodeOperationError(this.getNode(), 'No data with the current filter could be found', {

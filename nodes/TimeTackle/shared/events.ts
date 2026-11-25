@@ -67,6 +67,15 @@ export function pollingBody(input: EventFilters): IDataObject {
 	});
 }
 
+// A test run only needs one event to show. It looks at the whole window, not just the last 2 days, so a quiet
+// workspace still returns a sample.
+export function sampleBody(input: EventFilters): IDataObject {
+	return buildExportBody(input, {
+		startDate: isoDate(daysFromNow(-30)),
+		endDate: isoDate(daysFromNow(90)),
+	});
+}
+
 // The same meeting can appear on several calendars, so the id combines calendar and event.
 const withId = (row: IDataObject): IDataObject => ({ id: `${row.calendarId}:${row.eventId}`, ...row });
 
@@ -77,10 +86,11 @@ export async function fetchEvents(
 	maxRows: number = Infinity,
 ): Promise<IDataObject[]> {
 	const rows: IDataObject[] = [];
+	const pageSize = Math.min(PAGE_SIZE, maxRows);
 	for (let page = 1; rows.length < maxRows; page += 1) {
 		const response = (await apiRequest.call(this, 'POST', '/export-sheets', body, {
 			page,
-			limit: PAGE_SIZE,
+			limit: pageSize,
 		})) as IDataObject;
 		const data = (response.data as IDataObject) || {};
 		rows.push(...((data.data as IDataObject[]) || []));
