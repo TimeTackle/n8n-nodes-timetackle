@@ -49,9 +49,9 @@ export function checkResponse(node: INode, status: number, body: unknown): unkno
 		description = 'TimeTackle handles one request per endpoint at a time for a workspace. Try again in a minute.';
 	}
 
-	const error = new NodeApiError(node, data as JsonObject, { message, description, httpCode: String(status) });
-	(error as NodeApiError & { timeTackleCode?: string }).timeTackleCode = code;
-	throw error;
+	throw Object.assign(new NodeApiError(node, data as JsonObject, { message, description, httpCode: String(status) }), {
+		timeTackleCode: code,
+	});
 }
 
 export async function apiRequest(

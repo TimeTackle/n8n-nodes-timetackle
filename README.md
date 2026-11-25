@@ -13,9 +13,12 @@ nodes documentation and install `@timetackle/n8n-nodes-timetackle`.
 
 ## Credentials
 
-Create a **TimeTackle API** credential with the workspace API key. An owner or admin finds the key in TimeTackle under
-Settings > Developer; API access is included in every paid plan. The key is sent in the `X-Tackle-Api-Key` header, and
-n8n tests it by reading the workspace owner.
+1. In TimeTackle, an owner or admin opens **Settings > Developer** and copies the workspace API key. API access is
+   included in every paid plan.
+2. In n8n, open **Credentials > Add credential**, search for **TimeTackle API** and paste the key into **API Key**.
+3. Click **Save**. n8n tests the key by reading the workspace owner; a wrong key fails the test.
+
+The key is sent in the `X-Tackle-Api-Key` header of every request, never in the URL.
 
 ## What it does
 
@@ -54,17 +57,121 @@ does the same. A test run returns the latest record.
 
 Calendars, teams, members, tags and properties are picked from lists loaded from the workspace.
 
-### Example
-
-1. Add **TimeTackle Trigger**, set **Trigger On** to *New Tagged Event* and pick the tag `Client:Acme`.
-2. Add **Google Sheets > Append Row** and map `subject`, `startDate`, `duration` and `tags`.
-3. Activate the workflow. Each event tagged `Client:Acme` from then on adds one row.
-
 ### Workflows saved with version 0.2.x
 
 The TimeTackle node is now at node version 2. Workflows saved with 0.2.x stay on node version 1 and run as before:
 Property > Create still takes primary and secondary properties, Property > Get Many still returns the
 `{primary, secondary}` list, and Export still reads 100 rows per page unless Limit was changed.
+
+## Usage examples
+
+### Add a row for every tagged meeting (trigger)
+
+Add **TimeTackle Trigger** as the first node and set:
+
+| Parameter | Value |
+| --- | --- |
+| Credential | your TimeTackle API credential |
+| Poll Times | Every X, 15 minutes |
+| Trigger On | New Tagged Event |
+| Tag Name or ID | `Client:Acme` (picked from the list of your tags and their values) |
+| Calendar Names or IDs | leave empty for every calendar, or pick the calendars to watch |
+| Team Name or ID | leave empty, or pick a team to watch only its calendars |
+| Time Zone | `Europe/Berlin` |
+
+Click **Fetch Test Event** to load the latest matching event. Each item looks like this:
+
+```json
+{
+  "id": "jane@acme.com:0d842cd5-cbc1-4ab2-9943-f1307f214b14",
+  "calendar": "Jane Doe",
+  "calendarId": "jane@acme.com",
+  "eventId": "0d842cd5-cbc1-4ab2-9943-f1307f214b14",
+  "subject": "Weekly sync with Acme",
+  "description": "Agenda in the doc",
+  "location": "Zoom",
+  "startDate": "11/02/2026",
+  "startTime": "10:00 AM",
+  "endDate": "11/02/2026",
+  "endTime": "10:30 AM",
+  "duration": "0.5",
+  "createdDate": "10/28/2026",
+  "createdTime": "09:12 AM",
+  "organizedByEmail": "jane@acme.com",
+  "allAttendeesByEmail": "jane@acme.com, sam@client.com",
+  "tags": "Client:Acme, Billable",
+  "crmAccountName": "Acme",
+  "crmOpportunityName": "Acme renewal"
+}
+```
+
+Connect **Google Sheets > Append Row** and map `{{ $json.subject }}`, `{{ $json.startDate }}`, `{{ $json.duration }}`
+and `{{ $json.tags }}`. Activate the workflow: from then on each event tagged `Client:Acme` adds one row.
+
+### Invite a new hire (action)
+
+After a trigger that carries the person's name and email (a form, an HR tool), add **TimeTackle** and set:
+
+| Parameter | Value |
+| --- | --- |
+| Resource | Member |
+| Operation | Invite |
+| Name | `{{ $json.name }}` |
+| Email | `{{ $json.email }}` |
+| Role | Contributor |
+| Calendar Access > Connects Their Own Calendar | on |
+| Calendar Access > Team Names or IDs | Sales |
+
+TimeTackle emails the invitation and the node returns the member:
+
+```json
+{
+  "id": 345,
+  "name": "Jane Doe",
+  "email": "jane@acme.com",
+  "role": "CONTRIBUTOR",
+  "status": "PENDING",
+  "access": { "allCalendars": false, "connectOwnCalendar": true, "teamIds": [12], "calendarIds": [], "userIds": [] }
+}
+```
+
+Admins always see all calendars, so an Admin invite needs no Calendar Access. Every other role needs at least one
+Calendar Access field.
+
+### Find last week's meetings for a client (search)
+
+| Parameter | Value |
+| --- | --- |
+| Resource | Event |
+| Operation | Get Many |
+| From | `{{ $today.minus({ days: 7 }) }}` |
+| To | `{{ $today }}` |
+| Return All | on |
+| Filters > Tag Name or ID | `Client:Acme` |
+| Filters > Text | `renewal` (optional: only events whose title contains it) |
+
+The node returns one item per event per calendar, in the shape shown above. Add **Summarize** to total `duration`.
+
+### Keep tags in step with another tool
+
+| Parameter | Value |
+| --- | --- |
+| Resource | Property |
+| Operation | Create |
+| Name | `{{ $json.projectName }}` |
+| Type | Tag |
+| Additional Fields > Sub-Tags or Options | `Design`, `Build` |
+
+A tag with the same name is updated instead of duplicated, so the workflow can run for every project without a
+lookup first. The node returns the tag with its id and the ids of its sub-tags.
+
+### Errors
+
+A failed request stops the node with TimeTackle's own message, for example "OWNER members cannot be removed"; a
+wrong or inactive key says "Your TimeTackle API key is invalid or inactive." In the node's **Settings**, set
+**On Error** to continue to get `{ "error": "..." }` as the item instead. TimeTackle handles one request per endpoint
+at a time for a workspace: an action that hits a busy endpoint fails and says to try again in a minute (turn on
+**Retry On Fail**), and a trigger skips that poll and catches up on the next one.
 
 ## Develop
 
