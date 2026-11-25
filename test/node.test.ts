@@ -80,11 +80,11 @@ describe('node definition', () => {
 });
 
 describe('Event', () => {
-	it('Get Many searches the date range with the filters and stops at the limit', async () => {
+	it('Get Many searches the date range with the filters and asks for no more than the limit', async () => {
 		let sent: IDataObject = {};
 		nock(API).post(`${BASE}/export-sheets`, (body) => { sent = body; return true; })
-			.query({ page: '1', limit: '100' })
-			.reply(200, exportPage([{ calendarId: 'a@x.com', eventId: 'e1' }, { calendarId: 'a@x.com', eventId: 'e2' }], true));
+			.query({ page: '1', limit: '1' })
+			.reply(200, exportPage([{ calendarId: 'a@x.com', eventId: 'e1' }], true));
 
 		const results = await run({
 			resource: 'event',

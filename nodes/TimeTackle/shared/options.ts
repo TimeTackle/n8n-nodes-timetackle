@@ -55,6 +55,11 @@ export const loadOptions = {
 			.sort(byName);
 	},
 
+	// For an optional team field: n8n reports an empty value as an error unless the list offers it.
+	async getTeamsOrAll(this: ILoadOptionsFunctions): Promise<INodePropertyOptions[]> {
+		return [{ name: 'All Teams', value: '' }, ...(await loadOptions.getTeams.call(this))];
+	},
+
 	async getMembers(this: ILoadOptionsFunctions): Promise<INodePropertyOptions[]> {
 		return (await getMembers.call(this, { type: 'all' }))
 			.map((member) => ({
